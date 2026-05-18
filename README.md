@@ -1,29 +1,40 @@
 # Docker Optimizer AI
 
-Stateless Dockerfile best-practices advisor.  
-It takes a Dockerfile as input, asks Groq LLM for optimization suggestions, and returns:
+Stateless Dockerfile best-practices advisor powered by Groq.
+It takes a Dockerfile as input and returns:
 - Optimized Dockerfile
-- Improvement summary
+- Key improvements
 - Risk notes
-- Confidence level
-- Rule-check score before/after
+- Confidence
+- Static rule-check scores
+- YAML and JSON exports
+
+## What It Does
+
+- Analyzes Dockerfiles for common best-practice issues
+- Suggests safer, more reproducible optimizations
+- Scores the original and optimized Dockerfile with static rule checks
+- Keeps the app stateless, with no database or user storage
 
 ## Architecture
 
 - Frontend: React + Vite
-- API: `/api/optimize` (serverless-style handler)
+- Styling: Local Tailwind CSS via PostCSS
+- API: `/api/optimize`
+- Health check: `/api/health`
 - LLM provider: Groq Chat Completions API
-- Storage: none (stateless, no DB)
+- Storage: none
 
 ## Security Model
 
-- `GROQ_API_KEY` is server-side only.
-- Browser never calls Groq directly.
-- API has:
+- `GROQ_API_KEY` is server-side only
+- The browser never calls Groq directly
+- API hardening includes:
   - input size cap
   - request timeout
   - basic in-memory rate limiting
-  - JSON schema validation for LLM output
+  - strict JSON validation for model output
+  - prompt-injection hardening for Dockerfile/context input
 
 ## Local Setup
 
@@ -33,20 +44,20 @@ It takes a Dockerfile as input, asks Groq LLM for optimization suggestions, and 
 npm install
 ```
 
-2. Create env file
+2. Create environment file
 
 ```bash
 cp .env.local.example .env.local
 ```
 
-3. Set variables in `.env.local`
+3. Set values in `.env.local`
 
 ```env
 GROQ_API_KEY=your_groq_api_key
 GROQ_MODEL=llama-3.3-70b-versatile
 ```
 
-4. Start app
+4. Start the app
 
 ```bash
 npm run dev
@@ -54,11 +65,18 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+## Available Scripts
+
+- `npm run dev` - start local development server
+- `npm run build` - build production bundle
+- `npm run preview` - preview production build locally
+- `npm run typecheck` - run TypeScript type check
+
 ## API Contract
 
-### Request
+### `POST /api/optimize`
 
-`POST /api/optimize`
+Request body:
 
 ```json
 {
@@ -67,7 +85,7 @@ Open `http://localhost:3000`.
 }
 ```
 
-### Response
+Response:
 
 ```json
 {
@@ -75,43 +93,83 @@ Open `http://localhost:3000`.
   "improvements": ["..."],
   "explanation": "...",
   "detailedChanges": [
-    { "original": "...", "optimized": "...", "reason": "..." }
+    {
+      "original": "...",
+      "optimized": "...",
+      "reason": "..."
+    }
   ],
   "riskNotes": ["..."],
   "confidence": "high",
   "ruleChecks": {
-    "before": { "total": 6, "passed": 3, "score": 5, "findings": [] },
-    "after": { "total": 6, "passed": 5, "score": 8.3, "findings": [] }
+    "before": {
+      "total": 6,
+      "passed": 3,
+      "score": 5,
+      "findings": []
+    },
+    "after": {
+      "total": 6,
+      "passed": 5,
+      "score": 8.3,
+      "findings": []
+    }
   }
 }
 ```
 
-## Rule Checks (Static)
+### `GET /api/health`
 
+Returns a lightweight deployment check:
+
+```json
+{
+  "ok": true,
+  "service": "docker-optimizer-ai",
+  "hasGroqKey": true,
+  "model": "llama-3.3-70b-versatile",
+  "timestamp": "..."
+}
+```
+
+## Rule Checks
+
+The app applies static checks for:
 - Pinned base image versions
 - Non-root runtime user
-- No obvious secrets in `ARG/ENV`
-- Avoid `curl | bash`
-- Deterministic install patterns (`npm ci` preference)
+- No obvious secrets in `ARG`/`ENV`
+- Avoiding `curl | bash`
+- Deterministic install patterns
 - Cache-friendly `COPY` and install ordering
 
-## Deployment (Vercel)
+## Deployment
 
-Set these env vars in Vercel project settings:
+### Vercel
+
+Set these environment variables in the Vercel project settings:
 - `GROQ_API_KEY`
 - `GROQ_MODEL` (optional)
 
-Then deploy normally.
+The repo includes:
+- `vercel.json` with API timeout and security headers
+- `/api/health` for post-deploy verification
 
-## Local Env Behavior
+### Post-deploy checks
 
-- API server reads env from:
-  1. process env (highest priority)
-  2. `.env.local`
-  3. `.env`
-- So if key is in `.env.local`, local `npm run dev` works without manual export.
+1. Open `GET /api/health`
+2. Confirm `hasGroqKey` is `true`
+3. Send a sample `POST /api/optimize`
+4. Confirm the response is valid JSON with optimized output
 
-## Important Limitation
+## Current Limitations
 
-This tool gives AI + static best-practices guidance only.  
-It does **not** guarantee runtime build success unless you add a separate build-verification pipeline.
+- The app does not guarantee runtime build success
+- It is recommendation-based, not a verified build pipeline
+- It does not use a database
+- `Optimization Strategy` and `Quality Signal` were intentionally removed from the UI to keep the interface focused
+- User-supplied Dockerfiles and context are treated as untrusted data, not instructions
+
+## Notes
+
+- `logo.png` is used in the header and favicon
+- The app uses local Tailwind CSS, not the CDN runtime script

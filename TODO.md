@@ -1,84 +1,32 @@
-# Docker Optimizer AI - Implementation TODO
+# Docker Optimizer AI - Current TODO
 
-## Phase 0: Product Positioning (Must)
-- [x] Product name/description update: "Dockerfile Best-Practices Advisor" (not build guarantee tool).
-- [x] UI disclaimer add: "AI recommendation only, runtime build is not verified."
-- [x] Output labels add: `Confidence`, `Risk Notes`, `Not Runtime Verified`.
+## Completed
+- Phase 0: Product positioning and non-guarantee messaging
+- Phase 1: Stateless Groq API migration, server-side key handling, rate limit, timeout
+- Phase 2: Strict LLM schema validation, retry policy, safe failure handling
+- Phase 3: Static Dockerfile rule checks and score comparison
+- Phase 5: Output sections, downloads, loading states, retry UX
+- Phase 7: Audit fix, local Tailwind pipeline, security headers, Vercel health check
 
-## Phase 1: Security + Architecture (Must)
-- [x] Move Gemini API call from client to serverless API route (`/api/optimize`).
-- [x] Remove client-side API key usage (`process.env.API_KEY` in frontend bundle).
-- [x] Store key only in Vercel env var (`GROQ_API_KEY`) on server side.
-- [x] Add request rate limit (IP-based basic limit).
-- [x] Add basic abuse protection: input size cap + request timeout.
+## Pending
+- Phase 4: Prompt quality and context, including optional runtime/language, package manager, target environment, and user constraint fields in the UI
+- Phase 4: Inject the collected context into `/api/optimize`
+- Phase 4: Add a minimal-change mode for already-good Dockerfiles
+- Phase 6: Testing and quality gates
+- Phase 6: Add unit tests for schema validation, rule checks, and score calculation
+- Phase 6: Add integration tests for `/api/optimize`
+- Phase 6: Add regression fixtures for good, bad, and mixed Dockerfiles
+- Phase 6: Add CI workflow for `npm ci`, `typecheck`, tests, and build
+- Release hardening: verify actual Vercel deployment end to end
+- Release hardening: confirm `/api/health` and `/api/optimize` on the deployed URL
+- Release hardening: add a production smoke test step after deployment
 
-## Phase 2: LLM Contract Hardening (Must)
-- [x] Upgrade response schema to strict fields:
-  - `optimizedDockerfile`
-  - `improvements[]`
-  - `riskNotes[]`
-  - `confidence` (`high|medium|low`)
-  - `changeSummary[]` (`original`, `optimized`, `reason`)
-- [x] Add runtime JSON schema validation (reject malformed output).
-- [x] Add retry policy for invalid LLM output (max 2 retries).
-- [x] Add safe failure response when model fails ("Could not generate high-confidence optimization").
+## Optional Later
+- Add verified build mode when repo context is available
+- Queue builds to an external worker
+- Return build logs and image size delta
 
-## Phase 3: Best-Practices Rule Checks (Must)
-- [x] Add static checks on input Dockerfile:
-  - tag pinning check
-  - root user check
-  - dependency install pattern check (`npm ci` preference etc.)
-  - layer caching order check
-  - secret-like pattern check (`ENV/ARG` with key/token/password)
-- [x] Add same checks on optimized output.
-- [x] Show before/after rule score in UI (e.g. `6/10 -> 9/10`).
-- [x] If optimization worsens score, block output and return warning.
-
-## Phase 4: Prompt Quality + Context (Should)
-- [ ] Collect optional context fields in UI:
-  - runtime/language
-  - package manager
-  - target env (`dev/staging/prod`)
-  - constraints ("must keep alpine", "must keep root", etc.)
-- [ ] Inject context into system/user prompt safely.
-- [ ] Add "minimal change mode" in prompt for already-good Dockerfiles.
-
-## Phase 5: UX Improvements (Should)
-- [ ] Add output sections:
-  - Optimized Dockerfile
-  - Key Improvements
-  - Risk Notes
-  - Confidence
-  - Rule Score Delta
-- [ ] Add copy/download buttons for Dockerfile and JSON report.
-- [ ] Add loading + retry UI states with clear error messages.
-
-## Phase 6: Testing + Quality Gates (Must)
-- [ ] Add unit tests for:
-  - schema validation
-  - rule checks
-  - score calculation
-- [ ] Add integration test for `/api/optimize` success/failure flow.
-- [ ] Add regression test set with sample Dockerfiles (good/bad/mixed).
-- [ ] Add CI workflow: `npm ci`, typecheck, test, build.
-
-## Phase 7: Dependency + Deploy Hardening (Must)
-- [ ] Resolve `npm audit` high vulnerabilities and update lockfile.
-- [ ] Remove CDN Tailwind runtime dependency; use local build pipeline.
-- [ ] Add security headers (CSP baseline, X-Content-Type-Options, Referrer-Policy).
-- [ ] Verify Vercel deployment with env vars and function timeout config.
-
-## Phase 8: Optional Advanced Validation (Later)
-- [ ] Add optional "Verified Build Mode" (only when repo/context is provided).
-- [ ] Queue job to external build worker (Cloud Build/CodeBuild/Runner).
-- [ ] Return `Verified Build: pass/fail` with logs + image size delta.
-
----
-
-## Definition of Done (Release v1)
-- [x] No API key in browser bundle.
-- [x] Strict validated JSON contract from LLM.
-- [x] Input/output rule scoring implemented and visible.
-- [x] Clear non-guarantee messaging in UI.
-- [ ] Tests + CI passing.
-- [ ] Vercel production deploy successful.
+## Notes
+- `Optimization Strategy` and `Quality Signal` UI sections were intentionally removed.
+- The app is currently stateless and does not use a database.
+- `riskNotes`, `confidence`, and `ruleChecks` still exist in the API response and YAML report.

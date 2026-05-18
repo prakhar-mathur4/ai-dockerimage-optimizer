@@ -47,6 +47,19 @@ CMD ["node", "index.js"]`);
     }
   };
 
+  const toJsonReport = (res: OptimizationResult): string => {
+    return JSON.stringify(
+      {
+        generatedAt: new Date().toISOString(),
+        app: metadata?.name || 'Docker Optimizer AI',
+        inputDockerfile: input,
+        result: res,
+      },
+      null,
+      2
+    );
+  };
+
   const toYaml = (res: OptimizationResult): string => {
     const sanitize = (str: string) => str.replace(/"/g, '\\"').replace(/\n/g, '\\n');
     
@@ -76,6 +89,44 @@ ${res.riskNotes.map(note => `  - "${sanitize(note)}"`).join('\n')}
 optimized_content: |
 ${res.optimizedDockerfile.split('\n').map(line => '  ' + line).join('\n')}
 `;
+  };
+
+  const downloadFile = (filename: string, content: string, mimeType: string): void => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadDockerfile = () => {
+    if (!output) return;
+    downloadFile('Dockerfile.optimized', output.optimizedDockerfile, 'text/x-dockerfile');
+  };
+
+  const handleDownloadJsonReport = () => {
+    if (!output) return;
+    downloadFile('dockerfile-optimization-report.json', toJsonReport(output), 'application/json');
+  };
+
+  const getFriendlyErrorTitle = (message: string): string => {
+    if (/Too many requests/i.test(message)) return 'Rate Limit Reached';
+    if (/Missing GROQ_API_KEY/i.test(message)) return 'Server Configuration Error';
+    if (/exceeds/i.test(message)) return 'Input Too Large';
+    if (/Optimization failed/i.test(message)) return 'Model Request Failed';
+    return 'Optimization Error';
+  };
+
+  const getFriendlyErrorHint = (message: string): string => {
+    if (/Too many requests/i.test(message)) return 'Wait for a minute and retry.';
+    if (/Missing GROQ_API_KEY/i.test(message)) return 'Set GROQ_API_KEY in server environment and restart.';
+    if (/exceeds/i.test(message)) return 'Try a shorter Dockerfile input.';
+    if (/Optimization failed/i.test(message)) return 'Retry the request. If it repeats, check provider/model settings.';
+    return 'Retry once. If issue continues, check server logs.';
   };
 
   const handleClear = () => {
@@ -155,19 +206,37 @@ ${res.optimizedDockerfile.split('\n').map(line => '  ' + line).join('\n')}
               <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Optimized Output</h2>
             </div>
             
-            <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-slate-800 shadow-inner">
-              <button 
-                onClick={() => setViewMode('dockerfile')}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-tighter rounded-md transition-all ${viewMode === 'dockerfile' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-              >
-                Dockerfile
-              </button>
-              <button 
-                onClick={() => setViewMode('yaml')}
-                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-tighter rounded-md transition-all ${viewMode === 'yaml' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-              >
-                YAML Report
-              </button>
+            <div className="flex items-center gap-2">
+              {output && (
+                <>
+                  <button
+                    onClick={handleDownloadDockerfile}
+                    className="px-2.5 py-1.5 text-[10px] font-bold uppercase rounded-md border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition-colors"
+                  >
+                    Download Dockerfile
+                  </button>
+                  <button
+                    onClick={handleDownloadJsonReport}
+                    className="px-2.5 py-1.5 text-[10px] font-bold uppercase rounded-md border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition-colors"
+                  >
+                    Download JSON
+                  </button>
+                </>
+              )}
+              <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-slate-800 shadow-inner">
+                <button 
+                  onClick={() => setViewMode('dockerfile')}
+                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-tighter rounded-md transition-all ${viewMode === 'dockerfile' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                  Dockerfile
+                </button>
+                <button 
+                  onClick={() => setViewMode('yaml')}
+                  className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-tighter rounded-md transition-all ${viewMode === 'yaml' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                  YAML Report
+                </button>
+              </div>
             </div>
           </div>
           <p className="text-[11px] text-amber-300/80 bg-amber-900/10 border border-amber-500/20 rounded-lg px-3 py-2">
@@ -183,9 +252,35 @@ ${res.optimizedDockerfile.split('\n').map(line => '  ' + line).join('\n')}
         {/* Changes Reference & Explanations */}
         <div className="lg:col-span-2 space-y-8 mt-4">
           {error && (
-            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm flex gap-3 items-center">
-              <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              {error}
+            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-300 text-sm">
+              <div className="flex gap-3 items-start">
+                <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <div className="flex-1">
+                  <p className="font-semibold">{getFriendlyErrorTitle(error)}</p>
+                  <p className="mt-1 text-red-200/90">{error}</p>
+                  <p className="mt-1 text-red-200/70 text-xs">{getFriendlyErrorHint(error)}</p>
+                </div>
+                <button
+                  onClick={handleOptimize}
+                  disabled={isLoading || !input.trim()}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-md border transition-colors ${
+                    isLoading || !input.trim()
+                      ? 'border-red-900 text-red-800 cursor-not-allowed'
+                      : 'border-red-400/40 text-red-100 hover:bg-red-500/20'
+                  }`}
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
+          )}
+
+          {isLoading && (
+            <div className="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-indigo-200 text-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-4 h-4 border-2 border-indigo-200/30 border-t-indigo-200 rounded-full animate-spin"></div>
+                <span>Analyzing Dockerfile and generating optimized output...</span>
+              </div>
             </div>
           )}
 
