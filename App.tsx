@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { optimizeDockerfile } from './services/geminiService';
-import { OptimizationResult, DetailedChange } from './types';
+import { optimizeDockerfile } from './services/optimizerService';
+import { OptimizationResult } from './types';
 import CodeBlock from './components/CodeBlock';
 
 const App: React.FC = () => {
@@ -16,13 +16,13 @@ CMD ["node", "index.js"]`);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'dockerfile' | 'yaml'>('dockerfile');
-  const [metadata, setMetadata] = useState<{ name: string; systemPrompt: string } | null>(null);
+  const [metadata, setMetadata] = useState<{ name: string } | null>(null);
 
   // Load metadata dynamically to avoid import specifier issues
   useEffect(() => {
     fetch('./metadata.json')
       .then(res => res.json())
-      .then(data => setMetadata(data))
+      .then(data => setMetadata({ name: data?.name || 'Docker Optimizer AI' }))
       .catch(err => {
         console.error("Failed to load metadata:", err);
         setError("Configuration error: Could not load metadata.json");
@@ -34,15 +34,10 @@ CMD ["node", "index.js"]`);
       setError("Please provide a Dockerfile to optimize.");
       return;
     }
-    if (!metadata) {
-      setError("System prompt not loaded yet.");
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
     try {
-      const result = await optimizeDockerfile(input, metadata.systemPrompt);
+      const result = await optimizeDockerfile({ dockerfile: input });
       setOutput(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unknown error occurred.");
@@ -57,9 +52,12 @@ CMD ["node", "index.js"]`);
     return `---
 metadata:
   app: "${metadata?.name || 'Docker Optimizer'}"
-  version: "1.1"
+  version: "2.0"
 
 summary:
+  confidence: "${res.confidence}"
+  score_before: ${res.ruleChecks.before.score}
+  score_after: ${res.ruleChecks.after.score}
   strategy: "${sanitize(res.explanation)}"
   total_improvements: ${res.improvements.length}
 
@@ -70,6 +68,9 @@ changes_reference:
 ${res.detailedChanges.map(c => `  - original: "${sanitize(c.original)}"
     optimized: "${sanitize(c.optimized)}"
     reason: "${sanitize(c.reason)}"`).join('\n')}
+
+risk_notes:
+${res.riskNotes.map(note => `  - "${sanitize(note)}"`).join('\n')}
 
 optimized_content: |
 ${res.optimizedDockerfile.split('\n').map(line => '  ' + line).join('\n')}
@@ -110,9 +111,9 @@ ${res.optimizedDockerfile.split('\n').map(line => '  ' + line).join('\n')}
             </button>
             <button 
               onClick={handleOptimize}
-              disabled={isLoading || !metadata}
+              disabled={isLoading}
               className={`relative overflow-hidden group px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${
-                isLoading || !metadata
+                isLoading
                 ? 'bg-slate-800 text-slate-500 cursor-not-allowed' 
                 : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl shadow-indigo-600/20 active:scale-[0.98]'
               }`}
@@ -168,6 +169,9 @@ ${res.optimizedDockerfile.split('\n').map(line => '  ' + line).join('\n')}
               </button>
             </div>
           </div>
+          <p className="text-[11px] text-amber-300/80 bg-amber-900/10 border border-amber-500/20 rounded-lg px-3 py-2">
+            AI recommendation only. Runtime build is not verified in this tool.
+          </p>
           <CodeBlock 
             code={output ? (viewMode === 'dockerfile' ? output.optimizedDockerfile : toYaml(output)) : ''} 
             label={viewMode === 'dockerfile' ? 'Docker Output' : 'YAML Analysis'} 
@@ -208,12 +212,12 @@ ${res.optimizedDockerfile.split('\n').map(line => '  ' + line).join('\n')}
                       {output.detailedChanges.map((change, idx) => (
                         <tr key={idx} className="group hover:bg-slate-800/30 transition-colors">
                           <td className="px-6 py-4 align-top">
-                            <code className="text-[11px] text-red-400 bg-red-400/5 px-2 py-1 rounded font-mono break-all block">
+                            <code className="text-[11px] text-red-400 bg-red-400/5 px-2 py-1 rounded font-mono whitespace-pre-wrap break-all block">
                               {change.original}
                             </code>
                           </td>
                           <td className="px-6 py-4 align-top">
-                            <code className="text-[11px] text-emerald-400 bg-emerald-400/5 px-2 py-1 rounded font-mono break-all block">
+                            <code className="text-[11px] text-emerald-400 bg-emerald-400/5 px-2 py-1 rounded font-mono whitespace-pre-wrap break-all block">
                               {change.optimized}
                             </code>
                           </td>
@@ -228,7 +232,7 @@ ${res.optimizedDockerfile.split('\n').map(line => '  ' + line).join('\n')}
               </div>
 
               {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
                 <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl">
                   <h3 className="text-sm font-bold text-emerald-400 mb-4 uppercase tracking-widest">Key Improvements</h3>
                   <ul className="space-y-3">
@@ -240,13 +244,20 @@ ${res.optimizedDockerfile.split('\n').map(line => '  ' + line).join('\n')}
                     ))}
                   </ul>
                 </div>
-                <div className="p-6 bg-indigo-900/10 border border-indigo-500/20 rounded-2xl">
-                  <h3 className="text-sm font-bold text-indigo-400 mb-4 uppercase tracking-widest">Optimization Strategy</h3>
-                  <p className="text-sm text-slate-300 leading-relaxed">
-                    {output.explanation}
-                  </p>
-                </div>
               </div>
+              {output.riskNotes.length > 0 && (
+                <div className="p-6 bg-rose-900/10 border border-rose-500/20 rounded-2xl">
+                  <h3 className="text-sm font-bold text-rose-300 mb-4 uppercase tracking-widest">Risk Notes</h3>
+                  <ul className="space-y-2 text-sm text-slate-300">
+                    {output.riskNotes.map((note, index) => (
+                      <li key={index} className="flex gap-2">
+                        <span className="text-rose-400">•</span>
+                        <span>{note}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 
@@ -257,7 +268,7 @@ ${res.optimizedDockerfile.split('\n').map(line => '  ' + line).join('\n')}
               </div>
               <h3 className="text-lg font-bold text-slate-400 mb-2">DevOps Engine Primed</h3>
               <p className="text-slate-600 text-sm max-w-xs mx-auto">
-                Paste a Dockerfile and let the Gemini AI analyze your container architecture for production readiness.
+                Paste a Dockerfile and get best-practices optimization suggestions with static quality checks.
               </p>
             </div>
           )}
@@ -269,7 +280,7 @@ ${res.optimizedDockerfile.split('\n').map(line => '  ' + line).join('\n')}
           <span>&copy; {new Date().getFullYear()} Docker Optimizer AI</span>
           <span className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-            System Prompt Active from metadata
+            Stateless API mode active
           </span>
         </div>
       </footer>
