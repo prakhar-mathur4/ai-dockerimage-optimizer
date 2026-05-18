@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { optimizeDockerfile } from './services/optimizerService';
 import { OptimizationResult } from './types';
 import CodeBlock from './components/CodeBlock';
+import logo from './logo.png';
 
 const App: React.FC = () => {
   const [input, setInput] = useState<string>(`# Example inefficient Dockerfile
@@ -89,11 +90,11 @@ ${res.optimizedDockerfile.split('\n').map(line => '  ' + line).join('\n')}
       <header className="px-6 py-4 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-20">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-              </svg>
-            </div>
+            <img
+              src={logo}
+              alt="Docker Optimizer AI Logo"
+              className="w-10 h-10 rounded-xl object-cover shadow-lg border border-slate-700"
+            />
             <div>
               <h1 className="text-lg font-bold tracking-tight text-white">Docker Optimizer AI</h1>
               <p className="text-[10px] text-slate-500 font-mono uppercase tracking-widest leading-none mt-1">
